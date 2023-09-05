@@ -1,0 +1,17 @@
+name: rl
+channels:
+  - pytorch
+  - conda-forge
+  - nvidia
+dependencies:
+  - python=3.10
+  - cudatoolkit=11.8
+  - pytorch
+  - pandas
+  - pip
+  - matplotlib
+  - gymnasium[atari, accept-rom-licesnse]
+  - pip:
+    - Shimmy
+    - ale-py
+    - autorom[accept-rom-license]
