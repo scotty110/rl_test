@@ -37,12 +37,13 @@ class env():
         self.obs = torch.zeros(self.tstep, *(84,84) ) 
         cropped = resize(obs)
         self.obs[0] = cropped.squeeze(0)
-        self.reward = [0 for i in range(self.tstep)] 
+        self.reward_window = [0. for i in range(self.tstep)] 
+        self.reward = 0.
 
     def step(self, action):
         obs, reward, stop, _, _ = self.env.step(action)
         f = lambda x: sum([v*(self.gamma**(i)) for i,v in enumerate(x)])
-        to_return = (self.obs, action, f(self.reward))
+        to_return = (self.obs, action, f(self.reward_window))
 
         # All Tensor
         #aTensor = torch.cat((torch.from_numpy(convert_gray(obs)).unsqueeze(0), self.obs), dim=0 )
@@ -51,7 +52,8 @@ class env():
 
         # Fix reward r_1 = r + gamma 
         #Will need to add gamma, but this might be right: V_t = R_t + V_(t+1)
-        self.reward = [*self.reward, reward][1:]
+        self.reqard = self.reward + reward
+        self.reward_window = [*self.reward_window, self.reward][1:]
         if stop:
             self.reset
         return to_return

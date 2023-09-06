@@ -63,10 +63,7 @@ def select_action(action:int, prob:float, action_space:int):
         return action  
 
 
-def training_step(policy:nn.Module, env):
-
-
-
+def training_step(policy:nn.Module, ) -> Memory:
     pass
 
 
@@ -87,16 +84,11 @@ def optimize(policy:nn.Module, memory:Memory, n_actions:int) -> nn.Module:
     '''
     # Feed to policy
     p_values = policy(state_batch.float())
+    print(p_values.shape)
     criterion = nn.SmoothL1Loss()
     loss = criterion(value_batch, p_values) 
+    print(loss.item())
 
-    # Optimize the model
-    optimizer = optim.AdamW(policy.parameters(), lr=1e-4, amsgrad=True)
-    optimizer.zero_grad()
-    loss.backward()
-    # In-place gradient clipping
-    torch.nn.utils.clip_grad_value_(policy.parameters(), 100)
-    optimizer.step()
     return 
 
 
@@ -146,5 +138,4 @@ if __name__ == '__main__':
         obs = obs.unsqueeze(0)
         memory.push(t)
 
-
-    #optimize(model, memory, n_actions)
+    optimize(model, memory, n_actions)
