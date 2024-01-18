@@ -92,10 +92,9 @@ def optimize(policy:nn.Module, memory:Memory, n_actions:int) -> nn.Module:
     batch_data = list(zip(*(memory.sample(BATCH_SIZE))))
 
     state_batch = torch.stack( (batch_data[0]), dim=0).to('cuda', dtype=torch.float)
-    #action_batch = torch.stack( torch.tensor((batch_data[1])), dim=0) # actions are ints
-    action_batch = torch.tensor(batch_data[1]).unsqueeze(0).to('cuda', dtype=torch.int)
+    action_batch = torch.tensor(batch_data[1]).to(dtype=torch.long)
     reward_batch = (torch.tensor(batch_data[2])).unsqueeze(1).to('cuda', dtype=torch.float)
-    value_batch = F.one_hot(action_batch, n_actions) * reward_batch
+    value_batch = F.one_hot(action_batch, n_actions).to('cuda', dtype=torch.float) * reward_batch
 
     '''
     DQN predicts Values, and then we select the action with the highest possible value 
@@ -108,7 +107,8 @@ def optimize(policy:nn.Module, memory:Memory, n_actions:int) -> nn.Module:
     # Optimize the model
     optimizer = optim.AdamW(policy.parameters(), lr=1e-4, amsgrad=True)
     optimizer.zero_grad()
-    loss.backward()
+    (-loss).backward()
+
     # In-place gradient clipping
     torch.nn.utils.clip_grad_value_(policy.parameters(), 100)
     optimizer.step()
@@ -116,10 +116,10 @@ def optimize(policy:nn.Module, memory:Memory, n_actions:int) -> nn.Module:
 
 
 if __name__ == '__main__':
-    BATCH_SIZE = 64 
+    BATCH_SIZE = 256 
 
     # Initialize 
-    memory = Memory(10000)
+    memory = Memory(1000)
     tstep = 4
     env = env(tstep)
     n_actions = env.n_actions
@@ -127,6 +127,8 @@ if __name__ == '__main__':
     model = DQN(tstep, n_actions)
     model = model.to('cuda', dtype=torch.float)
 
+    #f = lambda x: sum([v*(self.gamma**(i)) for i,v in enumerate(x)])
+
     # Training Loop
-    for i in range(100000):
-        training_step(model, env, memory, 0.1, i)
+    for i in range(int(10e6)):
+        training_step(model, env, memory, 0.9, i)

@@ -8,9 +8,13 @@ import gymnasium as gym
 #print(gym.envs.registry.keys())
 import torch
 import numpy as np
+import torch.nn.functional as F
     
 def convert_gray(obs:np.array) -> np.array: 
     return np.dot(obs[...,:3], [0.299, 0.587, 0.114])
+
+def resize(obs:np.array) -> torch.Tensor:
+    return (F.interpolate((torch.from_numpy(convert_gray(obs))).reshape([1,1,210,160]), size=(110,84) ))[:,:,15:99,:]
 
 def save(name, np_array):
     from PIL import Image
@@ -27,41 +31,46 @@ class env():
         self.next_obs = None
         self.reward = [0 for i in range(self.tstep)]
         self.reset()
-        #print(f'init reward: {self.reward}')
+        self.n_actions = self.env.action_space.n
 
+    def random_action(self):
+        return self.env.action_space.sample()
+    
     def reset(self):
         obs, _ = self.env.reset()
-        obs = convert_gray(obs)
-        self.obs = torch.zeros(self.tstep, *obs.shape ) 
-        self.obs[0] = torch.from_numpy(obs) 
-
-        self.reward = [0 for i in range(self.tstep)] 
-        #save('test_1', self.obs[0])
+        self.obs = torch.zeros(self.tstep, *(84,84) ) 
+        cropped = resize(obs)
+        self.obs[0] = cropped.squeeze(0)
+        self.reward_window = [0. for i in range(self.tstep)] 
+        self.reward = 0.
 
     def step(self, action):
         obs, reward, stop, _, _ = self.env.step(action)
+        print(f'Reward: {reward}')
         f = lambda x: sum([v*(self.gamma**(i)) for i,v in enumerate(x)])
-        #print(f'First step reward: {self.reward}')
-        to_return = (self.obs, action, f(self.reward))
+        to_return = (self.obs, action, f(self.reward_window))
 
         # All Tensor
-        aTensor = torch.cat((torch.from_numpy(convert_gray(obs)).unsqueeze(0), self.obs), dim=0 )
+        #aTensor = torch.cat((torch.from_numpy(convert_gray(obs)).unsqueeze(0), self.obs), dim=0 )
+        aTensor = torch.cat(((resize(obs)).squeeze(0), self.obs), dim=0 )
         self.obs = aTensor[:-1,...]
-        #save('test_2', self.obs[0])
 
         # Fix reward r_1 = r + gamma 
         #Will need to add gamma, but this might be right: V_t = R_t + V_(t+1)
-        self.reward = [*self.reward, reward][1:]
-        #print(f'last step reward: {self.reward}')
+        self.reqard = self.reward + reward
+        self.reward_window = [*self.reward_window, self.reward][1:]
         if stop:
             self.reset
         return to_return
+    
 
-
+'''
 if __name__ == '__main__':
     tester = env()
 
-    for i in range(1000):
+    t_list = []
+    for i in range(10):
         action = tester.env.action_space.sample()
         t = tester.step(action)
-        print(f'Obs size: {t[0].size()},\tReward: {t[2]}')
+        t_list.append(t)
+#'''
