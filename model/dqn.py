@@ -10,6 +10,9 @@ import sys
 sys.path.insert(0,'../atari')
 from main import env
 
+if not torch.cuda.is_available():
+    raise Exception('CUDA not available, code requires cuda')
+
 '''
 Try and recreate paper: 
     https://arxiv.org/pdf/1312.5602v1.pdf
@@ -23,6 +26,8 @@ class Memory():
         self.memory = deque([], maxlen=capacity) 
     
     def push(self, x):
+        if len(self.memory) == self.memory.maxlen:
+            self.memory.popleft()
         self.memory.append(x)
     
     def sample(self, batch_size):
@@ -54,19 +59,28 @@ class DQN(nn.Module):
 def select_action(action:int, prob:float, action_space:int):
     '''
     Select random action with probability (1-p)
+    epsilon-greedy
     '''
     r = random.random()
     if r > prob:
         with torch.no_grad():
-            return torch.tensor([random.randint(0,action_space)], dtype=torch.float)
+            return random.randint(0,action_space-1)
     else:
-        return action  
+        return action 
 
 
-def training_step(policy:nn.Module, env):
+def training_step(policy:nn.Module, env:env, memory:Memory, prob:float, steps_done:int):
+    # Env has obs that is reset at the begining of each episode
+    obs = env.obs
+    obs = obs.to('cuda', dtype=torch.float)
+    
+    action = torch.argmax(policy(obs))
+    action = select_action(action, prob, env.n_actions) 
+    v = env.step(action)
+    memory.push(v)
 
-
-
+    if steps_done % 100 == 0:
+        optimize(policy, memory, env.n_actions) 
     pass
 
 
@@ -77,16 +91,17 @@ def optimize(policy:nn.Module, memory:Memory, n_actions:int) -> nn.Module:
     # Get Data (This might not be right)
     batch_data = list(zip(*(memory.sample(BATCH_SIZE))))
 
-    state_batch = torch.stack( (batch_data[0]), dim=0)
-    action_batch = torch.stack( (batch_data[1]), dim=0)
-    reward_batch = (torch.tensor(batch_data[2])).unsqueeze(1)
+    state_batch = torch.stack( (batch_data[0]), dim=0).to('cuda', dtype=torch.float)
+    #action_batch = torch.stack( torch.tensor((batch_data[1])), dim=0) # actions are ints
+    action_batch = torch.tensor(batch_data[1]).unsqueeze(0).to('cuda', dtype=torch.int)
+    reward_batch = (torch.tensor(batch_data[2])).unsqueeze(1).to('cuda', dtype=torch.float)
     value_batch = F.one_hot(action_batch, n_actions) * reward_batch
 
     '''
     DQN predicts Values, and then we select the action with the highest possible value 
     '''
     # Feed to policy
-    p_values = policy(state_batch.float())
+    p_values = policy(state_batch)
     criterion = nn.SmoothL1Loss()
     loss = criterion(value_batch, p_values) 
 
@@ -100,51 +115,18 @@ def optimize(policy:nn.Module, memory:Memory, n_actions:int) -> nn.Module:
     return 
 
 
-
-
 if __name__ == '__main__':
-    BATCH_SIZE = 32
-    '''
-    #ex = torch.zeros(5,1,210,160)
-    ex = torch.zeros(5,1,84,84)
-    #print(ex.shape)
+    BATCH_SIZE = 64 
 
-    model = DQN(5)
-    x = model(ex)
-    print(x.shape)
-    print(x[0][:])
-    '''
+    # Initialize 
+    memory = Memory(10000)
     tstep = 4
     env = env(tstep)
-    n_actions = env.env.action_space.n
+    n_actions = env.n_actions
+    print(f'Number of Actions: {n_actions}')
     model = DQN(tstep, n_actions)
-    model = model.float()
+    model = model.to('cuda', dtype=torch.float)
 
-    '''
-    action = env.env.action_space.sample()
-    obs = env.step(action)[0]
-    obs = obs.unsqueeze(0)
-    #print(obs.shape)
-    for i in range(2):
-        mout = model(obs.float())
-        action = torch.argmax(mout)
-        #print(action)
-        t = env.step(action)
-        obs = t[0]
-        obs = obs.unsqueeze(0)
-        #print('HERE')
-    '''
-    memory = Memory(10000)
-    action = env.env.action_space.sample()
-    obs = env.step(action)[0]
-    obs = obs.unsqueeze(0)
-    for i in range(1000):
-        mout = model(obs.float())
-        action = torch.argmax(mout)
-        t = env.step(action)
-        obs = t[0]
-        obs = obs.unsqueeze(0)
-        memory.push(t)
-
-
-    #optimize(model, memory, n_actions)
+    # Training Loop
+    for i in range(100000):
+        training_step(model, env, memory, 0.1, i)

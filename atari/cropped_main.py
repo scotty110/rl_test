@@ -31,11 +31,7 @@ class env():
         self.next_obs = None
         self.reward = [0 for i in range(self.tstep)]
         self.reset()
-        self.n_actions = self.env.action_space.n
 
-    def random_action(self):
-        return self.env.action_space.sample()
-    
     def reset(self):
         obs, _ = self.env.reset()
         self.obs = torch.zeros(self.tstep, *(84,84) ) 
@@ -46,7 +42,6 @@ class env():
 
     def step(self, action):
         obs, reward, stop, _, _ = self.env.step(action)
-        print(f'Reward: {reward}')
         f = lambda x: sum([v*(self.gamma**(i)) for i,v in enumerate(x)])
         to_return = (self.obs, action, f(self.reward_window))
 
@@ -62,9 +57,8 @@ class env():
         if stop:
             self.reset
         return to_return
-    
 
-'''
+#'''
 if __name__ == '__main__':
     tester = env()
 
@@ -73,4 +67,9 @@ if __name__ == '__main__':
         action = tester.env.action_space.sample()
         t = tester.step(action)
         t_list.append(t)
+        #print(f'Obs size: {t[0].size()},\tReward: {t[2]}')
+        save('test',t[0][0])
+        save('test_2',t_list[-1][0][0])
+
+    print(torch.all(torch.eq(t_list[0][0],t_list[-1][0])))
 #'''
