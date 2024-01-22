@@ -40,7 +40,7 @@ class env():
         if done:
             print(f'Episode finished with reward {self.total_reward}')
             self.reset()
-        return stacked_obs, action, reward
+        return stacked_obs, action, reward, done
 
     def get_stacked_obs(self):
         # Assuming the observations are images, stack along a new dimension

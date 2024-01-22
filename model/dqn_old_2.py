@@ -4,7 +4,6 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 import random
-import math
 from collections import deque
 
 import sys
@@ -107,7 +106,7 @@ def training_step(policy: nn.Module, env: env, memory: Memory, prob: float, step
         optimize(policy, memory, env.n_actions)
 
 
-def optimize(policy: nn.Module, memory: Memory, gamma: float = 0.4):
+def optimize(policy: nn.Module, memory: Memory, n_actions: int, gamma: float = 0.99):
     if len(memory) < BATCH_SIZE:
         return
 
@@ -138,8 +137,7 @@ def optimize(policy: nn.Module, memory: Memory, gamma: float = 0.4):
     # Optimize the model
     optimizer = optim.AdamW(policy.parameters(), lr=1e-4, amsgrad=True)
     optimizer.zero_grad()
-    #(-loss).backward() # Do gradient ascent, but this fails to learn
-    loss.backward()
+    (-loss).backward()
 
     # Gradient clipping
     torch.nn.utils.clip_grad_value_(policy.parameters(), 100)
@@ -147,10 +145,10 @@ def optimize(policy: nn.Module, memory: Memory, gamma: float = 0.4):
     return 
 
 if __name__ == '__main__':
-    BATCH_SIZE = 512 
+    BATCH_SIZE = 256 
 
     # Initialize 
-    memory = Memory(10000)
+    memory = Memory(1000)
     tstep = 4
     env = env()
     n_actions = env.n_actions
