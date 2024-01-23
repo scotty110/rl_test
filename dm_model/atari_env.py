@@ -1,9 +1,13 @@
+import jax
 import jax.numpy as jnp
 from collections import deque
 import gymnasium as gym
 
+cpu_device = jax.devices('cpu')[0]
+
 def convert_gray(obs):
-    weights = jnp.array([0.299, 0.587, 0.114]).reshape((1, 1, 3))
+    obs = obs / 255.0
+    weights = jnp.array([0.299, 0.587, 0.114], dtype=jnp.float32).reshape((1, 1, 3))
     grayscale = jnp.sum(obs * weights, axis=2)
     return grayscale
 
@@ -22,14 +26,18 @@ class env():
     def reset(self):
         self.total_reward = 0
         obs, _ = self.env.reset()
-        obs = convert_gray(jnp.array(obs))
+        # Ensure that the observation is on CPU before processing
+        obs = jax.device_put(jnp.array(obs, dtype=jnp.float32), device=cpu_device)
+        obs = convert_gray(obs)
         for _ in range(self.stack_size):
             self.obs.append(obs)
         return self.get_stacked_obs()
     
     def step(self, action):
         obs, reward, done, _ = self.env.step(action)
-        obs = convert_gray(jnp.array(obs))
+        # Ensure that the observation is on CPU before processing
+        obs = jax.device_put(jnp.array(obs, dtype=jnp.float32), device=cpu_device)
+        obs = convert_gray(obs)
         self.obs.append(obs)
         stacked_obs = self.get_stacked_obs()
         self.total_reward += reward
@@ -39,5 +47,4 @@ class env():
         return stacked_obs, action, reward, done
 
     def get_stacked_obs(self):
-        # Assuming the observations are images, stack along a new dimension
         return jnp.stack(list(self.obs), axis=0)
