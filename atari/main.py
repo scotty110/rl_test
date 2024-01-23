@@ -12,7 +12,7 @@ def convert_gray(obs:torch.tensor) -> torch.tensor:
 
 
 class env():
-    def __init__(self, env_str='ALE/SpaceInvaders-v5', stack_size=4):
+    def __init__(self, env_str='ALE/SpaceInvaders-v5', stack_size=10):
         self.env = gym.make(env_str)
         self.stack_size = stack_size
         self.obs = deque(maxlen=stack_size)

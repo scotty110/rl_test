@@ -39,7 +39,7 @@ class Memory():
 
 
 class DQN(nn.Module):
-    def __init__(self, n_actions, history:int=4):
+    def __init__(self, n_actions, history:int=10):
         super(DQN, self).__init__()
         # Assuming the input image is grayscale, thus 1 channel
         self.conv_1 = nn.Conv2d(history, 32, kernel_size=8, stride=4)
@@ -79,16 +79,17 @@ def select_action(action:int, prob:float, action_space:int):
     epsilon-greedy
     '''
     r = random.random()
-    if r > prob:
+    if r < prob:
         with torch.no_grad():
             return random.randint(0,action_space-1)
     else:
         return action.item() 
 
 
-def training_step(policy: nn.Module, env: env, memory: Memory, prob: float, steps_done: int):
+def training_step(policy: nn.Module, env: env, optimizer, memory: Memory, prob: float, steps_done: int):
     # Get the current observation from the environment
-    obs = torch.stack(list(env.obs), dim=0).to('cuda', dtype=torch.float)
+    #obs = torch.stack(list(env.obs), dim=0).to('cuda', dtype=torch.float)
+    obs = (env.get_stacked_obs()).to('cuda', dtype=torch.float)
 
     # Forward pass through the policy network
     action_probs = policy(obs)
@@ -101,13 +102,13 @@ def training_step(policy: nn.Module, env: env, memory: Memory, prob: float, step
     new_obs, action, reward, done = env.step(action)
 
     # Push this experience to memory
-    memory.push((obs, action, reward, new_obs, done))
+    memory.push((obs.cpu(), action, reward, new_obs, done))
 
-    if steps_done % 100 == 0:
-        optimize(policy, memory, env.n_actions)
+    if steps_done % 10 == 0:
+        optimize(policy, optimizer, memory, env.n_actions)
 
 
-def optimize(policy: nn.Module, memory: Memory, gamma: float = 0.4):
+def optimize(policy: nn.Module, optimizer, memory: Memory, gamma: float = 0.9):
     if len(memory) < BATCH_SIZE:
         return
 
@@ -136,30 +137,37 @@ def optimize(policy: nn.Module, memory: Memory, gamma: float = 0.4):
     loss = criterion(current_q_values, target_q_values)
 
     # Optimize the model
-    optimizer = optim.AdamW(policy.parameters(), lr=1e-4, amsgrad=True)
     optimizer.zero_grad()
-    #(-loss).backward() # Do gradient ascent, but this fails to learn
     loss.backward()
 
     # Gradient clipping
-    torch.nn.utils.clip_grad_value_(policy.parameters(), 100)
+    torch.nn.utils.clip_grad_value_(policy.parameters(), clip_value=1)
     optimizer.step()
     return 
 
 if __name__ == '__main__':
-    BATCH_SIZE = 512 
+    BATCH_SIZE = 32
+    EPS_START = 0.9
+    EPS_END = 0.05
+    EPS_DECAY = 5000
 
     # Initialize 
-    memory = Memory(10000)
+    memory = Memory(int(1e4))
     tstep = 4
     env = env()
     n_actions = env.n_actions
     print(f'Number of Actions: {n_actions}')
     model = DQN(n_actions)
     model = model.to('cuda', dtype=torch.float)
+    optimizer = optim.AdamW(model.parameters(), lr=1e-3, amsgrad=True)
 
     #f = lambda x: sum([v*(self.gamma**(i)) for i,v in enumerate(x)])
+    def calc_epsilon(steps_done:int) -> float:
+        #, EPS_START: float, EPS_END: float, EPS_DECAY: int) -> float:
+        return EPS_END + (EPS_START - EPS_END) * math.exp(-1. * steps_done / EPS_DECAY)
 
+    epsilon = EPS_START
     # Training Loop
     for i in range(int(10e6)):
-        training_step(model, env, memory, 0.9, i)
+        epsilon = calc_epsilon(i)
+        training_step(model, env, optimizer, memory, epsilon, i)

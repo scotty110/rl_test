@@ -9,3 +9,6 @@ Simple atari enviroment.
 Staring with dqn. Getting familiar with update and training regiment. 
 Using as an outline: https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html 
 
+## DeepMind
+https://github.com/google-deepmind/dqn_zoo 
+

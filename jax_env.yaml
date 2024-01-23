@@ -1,0 +1,15 @@
+name: jax
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  - matplotlib
+  - gymnasium[atari, accept-rom-licesnse]
+  - pip:
+    - --find-links=https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+    - jax[cuda12_pip]
+    - dm-haiku
+    - optax
+    - Shimmy
+    - autorom[accept-rom-license]
