@@ -1,6 +1,7 @@
 '''
 Re Implement DQN from Deepmind
 https://github.com/google-deepmind/dqn_zoo/blob/45061f4bbbcfa87d11bbba3cfc2305a650a41c26/dqn_zoo/networks.py#L352
+https://github.com/google-deepmind/dqn_zoo
 '''
 import typing
 from typing import Any, Callable, Tuple, Union
@@ -140,7 +141,6 @@ def dqn_torso() -> NetworkFn:
         jax.nn.relu,
         hk.Flatten(),
     ])
-    print(f'net output: {network(inputs).shape}')
     return network(inputs)
 
   return net_fn 
@@ -153,7 +153,6 @@ def dqn_value_head(num_actions: int, shared_bias: bool = False) -> NetworkFn:
 
   def net_fn(inputs):
     """Function representing value head for a DQN Q-network."""
-    print(f'linear inputs: {inputs.shape}')
     network = hk.Sequential([
         linear(512),
         jax.nn.relu,
@@ -169,12 +168,10 @@ def dqn_atari_network(num_actions: int) -> NetworkFn:
 
   def net_fn(inputs):
     """Function representing DQN Q-network."""
-    print(f'Input shape: {inputs.shape}')
     network = hk.Sequential([
         dqn_torso(),
         dqn_value_head(num_actions),
     ])
-    print(f'Output shape: {network(inputs).shape}')
     return QNetworkOutputs(q_values=network(inputs))
 
   return net_fn
