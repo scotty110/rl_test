@@ -3,7 +3,7 @@ import jax.numpy as jnp
 from collections import deque
 import gymnasium as gym
 
-cpu_device = jax.devices('cpu')[0]
+cpu_device = jax.devices('gpu')[0]
 
 def convert_gray(obs):
     obs = obs / 255.0

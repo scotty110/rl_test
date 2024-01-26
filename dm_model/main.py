@@ -23,7 +23,7 @@ if __name__ == '__main__':
     # Init the environment and the model
     train_env = env()
     eval_env = env()
-    mem = Memory(int(1e6))
+    mem = Memory(int(1e3))
     model = dqn_atari_network(train_env.n_actions)
 
     # Initialize the basic obs
@@ -36,11 +36,11 @@ if __name__ == '__main__':
     agent = DQN(
         sample_network_input=obs,
         network=model,
-        optimizer=optax.adam(1e-4),
+        optimizer=optax.adam(1e-3),
         memory=mem,
-        batch_size=32,
-        epsilon=0.01,
-        update_period=100,
+        batch_size=64,
+        epsilon=0.1,
+        update_period=50,
         rng_key=rng,
         device=GPU,
         target_update_period=100,
@@ -55,15 +55,15 @@ if __name__ == '__main__':
 
         # Has logic to update the target network
         agent.update()
-        
-        if i % 1000:
+
+        if i>0 and i % 200 == 0:
             c = 0
             obs = eval_env.reset()
             done = False
             while not done:
                 c += 1
                 action = agent.select_action(obs)
-                obs, _, done, _ = eval_env.step(action, True) 
+                obs, _, _, done = eval_env.step(action, True) 
                 if c == 1000:
                     print(f'Eval episode reward: {eval_env.total_reward}')
                     done = True

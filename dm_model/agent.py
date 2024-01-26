@@ -17,7 +17,8 @@ class DQN():
                  rng_key: jax.random.PRNGKey,
                  device: jax.devices,
                  target_update_period: int = 1000,
-                 gamma: float = 0.99):
+                 gamma: float = 0.99,
+                 n_actions: int=6):
         '''
         Build a simple agent to explore and learn.
         Inputs:
@@ -32,6 +33,7 @@ class DQN():
             - device (jax.devices): The device to run the network on
             - target_update_period (int): The number of steps before updating the target network
             - gamma (float): Discount factor for future rewards
+            - n_actions (int): The number of actions in the environment
         '''
         # Jax is strange
         model_init, model_apply = hk.transform(network)
@@ -42,15 +44,17 @@ class DQN():
         self.target_model = model_apply
 
         self.optimizer = optimizer
+        self.optimizer_state = self.optimizer.init(self.network)
+
         self.memory = memory
         self.batch_size = batch_size
         self.epsilon = epsilon
         self.update_period = update_period
         self.target_update_period = target_update_period
         self.gamma = gamma
-        #self.rng_key, self.sub_key = jax.random.split(rng_key)
         self.rng_key, _ = jax.random.split(rng_key)
         self.device = device
+        self.n_actions = n_actions
 
         # Counter to keep track of steps
         self.step_count = 0
@@ -63,10 +67,13 @@ class DQN():
         Returns:
             - int: The selected action
         '''
+        self.rng_key, _ = jax.random.split(self.rng_key)
+
         state = jnp.expand_dims(state, axis=0)
-        if jax.random.uniform(self.rng_key, shape=()) < self.epsilon:
+        key1, key2 = jax.random.split(self.rng_key)
+        if jax.random.uniform(key1, shape=()) < self.epsilon:
             # Explore: Choose a random action
-            return jax.random.randint(self.rng_key, shape=(), minval=0, maxval=self.network.output_size)
+            return jax.random.randint(key2, shape=(), minval=0, maxval=self.n_actions)
         else:
             # Exploit: Choose the action with the highest Q-value
             q_values = self.model(self.network, self.rng_key, state)
@@ -92,6 +99,7 @@ class DQN():
         '''
         Update the Q-network based on a batch of experiences from the memory buffer.
         '''
+        self.rng_key, _ = jax.random.split(self.rng_key)
         if len(self.memory) < self.batch_size:
             # Not enough experiences in the memory buffer
             return
@@ -120,16 +128,14 @@ class DQN():
             target_q_values = rewards + (1 - dones) * self.gamma * jnp.max(next_q_values, axis=-1)
 
             # Compute the loss and gradients
-            #loss = jnp.mean(jax.nn.l2_loss(q_values[jnp.arange(self.batch_size), actions] - target_q_values))
-            #loss = jnp.mean(jnp.sum(jnp.square(q_values[jnp.arange(self.batch_size), actions] - target_q_values)))
             grads = jax.grad(self.loss_fn)(self.network, states, actions, target_q_values)
 
             # Update the network using the optimizer
-            updates, optimizer_state = self.optimizer.update(grads, self.optimizer_state)
-            self.network_params = optax.apply_updates(self.network_params, updates)
+            updates, self.optimizer_state = self.optimizer.update(grads, self.optimizer_state)
+            self.network_params = optax.apply_updates(self.network, updates)
 
         if self.step_count % self.target_update_period == 0:
             # Update the target network parameters
-            self.target_network_params = self.network_params
+            self.target_network = self.network
 
         self.step_count += 1
