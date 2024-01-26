@@ -38,7 +38,6 @@ class env():
         stacked_obs = self.get_stacked_obs()
         self.total_reward += reward
         if done:
-            print(f'Episode finished with reward {self.total_reward}')
             self.reset()
         return stacked_obs, action, reward, done
 
