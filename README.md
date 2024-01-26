@@ -1,6 +1,8 @@
 # RL Test
 Want to start exploring the world of RL, and code up some examples.
 
+All the code is broken, I think Jax is not updating? I am not familiar with it.
+
 ## Atari
 Simple atari enviroment. 
 
