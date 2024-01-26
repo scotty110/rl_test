@@ -3,7 +3,7 @@ import random
 
 class Memory():
     '''
-    Have a simple memory buffer to store (state, action value), tuple pairs.
+    Store (state, action value), tuple pairs. 
     '''
     def __init__(self, capacity):
         self.memory = deque([], maxlen=capacity) 

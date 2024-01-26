@@ -48,7 +48,8 @@ class DQN():
         self.update_period = update_period
         self.target_update_period = target_update_period
         self.gamma = gamma
-        self.rng_key = rng_key
+        #self.rng_key, self.sub_key = jax.random.split(rng_key)
+        self.rng_key, _ = jax.random.split(rng_key)
         self.device = device
 
         # Counter to keep track of steps
@@ -62,13 +63,14 @@ class DQN():
         Returns:
             - int: The selected action
         '''
+        state = jnp.expand_dims(state, axis=0)
         if jax.random.uniform(self.rng_key, shape=()) < self.epsilon:
             # Explore: Choose a random action
             return jax.random.randint(self.rng_key, shape=(), minval=0, maxval=self.network.output_size)
         else:
             # Exploit: Choose the action with the highest Q-value
-            q_values = self.model(self.network, state)
-            return jnp.argmax(q_values)
+            q_values = self.model(self.network, self.rng_key, state)
+            return jnp.argmax(q_values.q_values)
 
     def store_transition(self, state: jnp.ndarray, action: int, reward: float, next_state: jnp.ndarray, done: bool):
         '''
@@ -80,12 +82,20 @@ class DQN():
             - next_state (jnp.ndarray): The next state
             - done (bool): Whether the episode is done
         '''
-        self.memory.append(state, action, reward, next_state, done)
+        self.memory.push((state, action, reward, next_state, done))
+
+    def loss_fn(self, params, states, actions, target_q_values):
+        q_values = self.model(params, self.rng_key, states).q_values
+        return jnp.mean(jnp.sum(jnp.square(q_values[jnp.arange(self.batch_size), actions] - target_q_values)))
 
     def update(self):
         '''
         Update the Q-network based on a batch of experiences from the memory buffer.
         '''
+        if len(self.memory) < self.batch_size:
+            # Not enough experiences in the memory buffer
+            return
+
         if self.step_count % self.update_period == 0:
             # Sample a batch of experiences from the memory
             batch = self.memory.sample(self.batch_size)
@@ -101,15 +111,18 @@ class DQN():
             dones = jnp.array(dones)
 
             # Compute the Q-values for the current and next states
-            q_values = self.model(self.network, states)
-            next_q_values = self.target_model(self.target_network, next_states)
+            q_values = self.model(self.network, self.rng_key, states)
+            q_values = q_values.q_values
+            next_q_values = self.target_model(self.target_network, self.rng_key, next_states)
+            next_q_values = next_q_values.q_values
 
             # Compute the target Q-values
             target_q_values = rewards + (1 - dones) * self.gamma * jnp.max(next_q_values, axis=-1)
 
             # Compute the loss and gradients
-            loss = jnp.mean(jax.nn.l2_loss(q_values[jnp.arange(self.batch_size), actions] - target_q_values))
-            grads = jax.grad(loss)(self.network.init_params, states)
+            #loss = jnp.mean(jax.nn.l2_loss(q_values[jnp.arange(self.batch_size), actions] - target_q_values))
+            #loss = jnp.mean(jnp.sum(jnp.square(q_values[jnp.arange(self.batch_size), actions] - target_q_values)))
+            grads = jax.grad(self.loss_fn)(self.network, states, actions, target_q_values)
 
             # Update the network using the optimizer
             updates, optimizer_state = self.optimizer.update(grads, self.optimizer_state)

@@ -34,7 +34,7 @@ class env():
         return self.get_stacked_obs()
     
     def step(self, action:int, evaluate=False):
-        obs, reward, done, _ = self.env.step(action)
+        obs, reward, done, _, _ = self.env.step(action)
         # Ensure that the observation is on CPU before processing
         obs = jax.device_put(jnp.array(obs, dtype=jnp.float32), device=cpu_device)
         obs = convert_gray(obs)
