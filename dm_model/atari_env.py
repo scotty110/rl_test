@@ -33,7 +33,7 @@ class env():
             self.obs.append(obs)
         return self.get_stacked_obs()
     
-    def step(self, action):
+    def step(self, action:int, evaluate=False):
         obs, reward, done, _ = self.env.step(action)
         # Ensure that the observation is on CPU before processing
         obs = jax.device_put(jnp.array(obs, dtype=jnp.float32), device=cpu_device)
@@ -42,7 +42,8 @@ class env():
         stacked_obs = self.get_stacked_obs()
         self.total_reward += reward
         if done:
-            print(f'Episode finished with reward {self.total_reward}')
+            if evaluate:
+                print(f'Episode finished with reward {self.total_reward}')
             self.reset()
         return stacked_obs, action, reward, done
 
