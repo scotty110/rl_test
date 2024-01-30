@@ -70,7 +70,7 @@ class Agent():
             gamma:float=0.999, 
             eps_start:float=1.0, 
             eps_end:float=0.01, 
-            eps_decay:float=0.999, 
+            eps_decay:float= 3000, #0.999, 
             tau:float=1e-2,
             target_update:int=10):
 
@@ -84,7 +84,8 @@ class Agent():
         self.target = Network().to(DEVICE, DTYPE)
         self.target.load_state_dict(self.policy.state_dict())
         
-        self.optimizer = optim.RMSprop(self.policy.parameters())
+        #self.optimizer = optim.RMSprop(self.policy.parameters(), lr=1e-3)
+        self.optimizer = optim.Adam(self.policy.parameters(), lr=1e-3)
         # optim.AdamW(policy_net.parameters(), lr=LR, amsgrad=True)
 
         self.batch_size = batch_size
@@ -137,7 +138,7 @@ class Agent():
         # Optimize the model
         self.optimizer.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_value_(self.policy.parameters(), 10)
+        torch.nn.utils.clip_grad_norm_(self.policy.parameters(), 1)
         self.optimizer.step()
 
         # Update target? 
@@ -156,7 +157,7 @@ class Agent():
             self.memory.push((obs.squeeze(0).to(device=CPU), action, reward, next_obs, done))
             obs = next_obs
 
-            if self.steps_done > 10000:
+            if self.steps_done > 5000:
                 break
 
             if self.steps_done % 100 == 0:
@@ -182,5 +183,5 @@ class Agent():
 
 if __name__ == '__main__':
     agent = Agent(env)
-    for i in range(int(1e4)):
+    for i in range(int(1e6)):
         agent.episode(i)
