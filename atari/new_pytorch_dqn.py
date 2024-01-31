@@ -11,9 +11,7 @@ import random
 import math
 from collections import deque
 
-import sys
-sys.path.insert(0,'./atari')
-from main import env
+from atari import env
 
 if not torch.cuda.is_available():
     raise Exception('CUDA not available, code requires cuda')
@@ -66,13 +64,13 @@ class Agent():
     def __init__(self, 
             env, 
             memory_len:int=int(1e4), 
-            batch_size:int=256, 
-            gamma:float=0.999, 
-            eps_start:float=1.0, 
-            eps_end:float=0.01, 
-            eps_decay:float= 3000, #0.999, 
-            tau:float=1e-2,
-            target_update:int=10):
+            batch_size:int=512, 
+            gamma:float=0.99, 
+            eps_start:float=0.99, 
+            eps_end:float=0.005, 
+            eps_decay:float= 100000, 
+            tau:float=0.2,
+            target_update:int=100):
 
         # Setup env and stuff
         self.env = env()
@@ -80,14 +78,15 @@ class Agent():
         self.memory = Memory(memory_len) 
 
         # Setup networks
-        self.policy = Network().to(DEVICE, DTYPE) 
-        self.target = Network().to(DEVICE, DTYPE)
+        self.policy = Network(n_actions=self.env.n_actions).to(DEVICE, DTYPE) 
+        self.target = Network(n_actions=self.env.n_actions).to(DEVICE, DTYPE)
         self.target.load_state_dict(self.policy.state_dict())
         
-        #self.optimizer = optim.RMSprop(self.policy.parameters(), lr=1e-3)
-        self.optimizer = optim.Adam(self.policy.parameters(), lr=1e-3)
-        # optim.AdamW(policy_net.parameters(), lr=LR, amsgrad=True)
+        #self.optimizer = optim.Adam(self.policy.parameters(), lr=1e-3)
+        self.optimizer = optim.AdamW(self.policy.parameters(), lr=1e-2, amsgrad=True)
 
+        self.loss = nn.SmoothL1Loss()
+    
         self.batch_size = batch_size
         self.gamma = gamma
         self.eps_start = eps_start
@@ -97,7 +96,7 @@ class Agent():
         self.target_update = target_update
 
         self.steps_done = 0
-
+        return
 
     def select_action(self, state):
         sample = random.random()
@@ -125,15 +124,16 @@ class Agent():
         dones = torch.tensor(dones, device=DEVICE, dtype=torch.float32)
 
         # Q values for current states
-        curr_Q = self.policy(states).gather(1, actions.unsqueeze(1)).squeeze(1)
+        curr_Q = self.policy(states).gather(1, actions.unsqueeze(1)) #.squeeze(1)
         
         # Q values for next states
         next_Q = self.target(next_states).max(1)[0]
         expected_Q = rewards + self.gamma * next_Q * (1 - dones)
-        expected_Q = expected_Q.detach()
+        expected_Q = expected_Q.unsqueeze(1).detach()
 
         # Loss
-        loss = F.smooth_l1_loss(curr_Q, expected_Q)
+        #loss = F.smooth_l1_loss(curr_Q, expected_Q)
+        loss = self.loss(curr_Q, expected_Q)
 
         # Optimize the model
         self.optimizer.zero_grad()
@@ -143,26 +143,35 @@ class Agent():
 
         # Update target? 
         if self.steps_done % self.target_update == 0:
-            for key in self.policy.state_dict():
-                self.target.state_dict()[key] = self.tau * self.policy.state_dict()[key] + (1 - self.tau) * self.target.state_dict()[key]
+
+            target_net_state_dict = self.target.state_dict()
+            policy_net_state_dict = self.policy.state_dict()
+            for key in policy_net_state_dict: 
+                target_net_state_dict[key] = self.tau * policy_net_state_dict[key] + (1 - self.tau) * target_net_state_dict[key]
+            self.target.load_state_dict(target_net_state_dict)
+
+        return
 
     def episode(self, i:int):
         obs = self.env.reset()
         done = False
-        self.steps_done = 0 # Reset at the start of a new episode
+        c = 0
+        total_reward = 0
+        self.policy.train()
+        print(f'Episode {i}:')
         while not done:
             obs = obs.unsqueeze(0).to(device=DEVICE, dtype=DTYPE)
             action = self.select_action(obs)
-            next_obs, reward, done, _ = self.env.step(action)
+            next_obs, action, reward, done = self.env.step(action)
             self.memory.push((obs.squeeze(0).to(device=CPU), action, reward, next_obs, done))
+            total_reward += reward
             obs = next_obs
 
-            if self.steps_done > 5000:
-                break
-
-            if self.steps_done % 100 == 0:
+            if self.steps_done % 100 == 0 or done: 
                 self.optimize_model()
-        
+            c += 1
+
+        print(f'\tTrain:\tSteps {c}\tReward: {total_reward}')
         self.eval(i)
         return
 
@@ -170,14 +179,18 @@ class Agent():
         obs = self.eval_env.reset()
         done = False
         total_reward = 0
+        c = 0
+        self.policy.eval()
         while not done:
             obs = obs.unsqueeze(0).to(device=DEVICE, dtype=DTYPE)
-            action = self.select_action(obs)
-            next_obs, reward, done, _ = self.eval_env.step(action)
+            action = torch.argmax( self.policy(obs) ).item()  # This is broken, buy why?
+            next_obs, action, reward, done = self.eval_env.step(action)
             total_reward += reward
             obs = next_obs
+            
+            c += 1 
 
-        print(f'Episode {episode} Eval reward: {total_reward}')
+        print(f'\tEval:\tSteps {c}\tReward: {total_reward}')
         return
 
 
