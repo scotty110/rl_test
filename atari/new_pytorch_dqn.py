@@ -1,7 +1,3 @@
-'''
-Want to base off of:
-https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
-'''
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -83,7 +79,7 @@ class Agent():
         self.target.load_state_dict(self.policy.state_dict())
         
         #self.optimizer = optim.Adam(self.policy.parameters(), lr=1e-3)
-        self.optimizer = optim.AdamW(self.policy.parameters(), lr=1e-2, amsgrad=True)
+        self.optimizer = optim.AdamW(self.policy.parameters(), lr=1e-4, amsgrad=True)
 
         self.loss = nn.SmoothL1Loss()
     
@@ -91,7 +87,7 @@ class Agent():
         self.gamma = gamma
         self.eps_start = eps_start
         self.eps_end = eps_end
-        self.eps_decay = eps_decay
+        self.eps_decay = eps_decay # (0.005) + (0.99 - 0.005) * e^(-1 500*750 / 100000) = 0.028 -> so still slightly exploring but should start to settle into learning more.
         self.tau = tau
         self.target_update = target_update
 
