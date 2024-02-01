@@ -64,7 +64,9 @@ class Agent():
             gamma:float=0.99, 
             eps_start:float=0.99, 
             eps_end:float=0.005, 
-            eps_decay:float= 100000,):
+            eps_decay:float= 100000, 
+            tau:float=0.2,
+            target_update:int=100):
 
         # Setup env and stuff
         self.env = env()
@@ -73,7 +75,10 @@ class Agent():
 
         # Setup networks
         self.policy = Network(n_actions=self.env.n_actions).to(DEVICE, DTYPE) 
+        self.target = Network(n_actions=self.env.n_actions).to(DEVICE, DTYPE)
+        self.target.load_state_dict(self.policy.state_dict())
         
+        #self.optimizer = optim.Adam(self.policy.parameters(), lr=1e-3)
         self.optimizer = optim.AdamW(self.policy.parameters(), lr=1e-4, amsgrad=True)
 
         self.loss = nn.SmoothL1Loss()
@@ -83,6 +88,8 @@ class Agent():
         self.eps_start = eps_start
         self.eps_end = eps_end
         self.eps_decay = eps_decay # (0.005) + (0.99 - 0.005) * e^(-1 500*750 / 100000) = 0.028 -> so still slightly exploring but should start to settle into learning more.
+        self.tau = tau
+        self.target_update = target_update
 
         self.steps_done = 0
         return
@@ -116,7 +123,7 @@ class Agent():
         curr_Q = self.policy(states).gather(1, actions.unsqueeze(1)) #.squeeze(1)
         
         # Q values for next states
-        next_Q = self.policy(next_states).max(1)[0]
+        next_Q = self.target(next_states).max(1)[0]
         expected_Q = rewards + self.gamma * next_Q * (1 - dones)
         expected_Q = expected_Q.unsqueeze(1).detach()
 
@@ -129,6 +136,15 @@ class Agent():
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.policy.parameters(), 1)
         self.optimizer.step()
+
+        # Update target? 
+        if self.steps_done % self.target_update == 0:
+
+            target_net_state_dict = self.target.state_dict()
+            policy_net_state_dict = self.policy.state_dict()
+            for key in policy_net_state_dict: 
+                target_net_state_dict[key] = self.tau * policy_net_state_dict[key] + (1 - self.tau) * target_net_state_dict[key]
+            self.target.load_state_dict(target_net_state_dict)
 
         return
 
