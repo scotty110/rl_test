@@ -3,6 +3,9 @@ Want to start exploring the world of RL, and code up some examples.
 
 All the code is broken, I think Jax is not updating? I am not familiar with it.
 
+Got DQN sorta working (?)
+Going to try an actor critic with PPO or another loss.
+
 ## Atari
 Simple atari enviroment. 
 
