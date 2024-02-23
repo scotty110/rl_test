@@ -63,8 +63,8 @@ class Agent():
             batch_size:int=512, 
             gamma:float=0.99, 
             eps_start:float=0.99, 
-            eps_end:float=0.005, 
-            eps_decay:float= 100000,):
+            eps_end:float=0.05, 
+            eps_decay:float= 1000000,):
 
         # Setup env and stuff
         self.env = env()
